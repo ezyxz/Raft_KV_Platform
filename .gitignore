@@ -1,4 +1,4 @@
 # Created by .ignore support plugin (hsz.mobi)
-.idea/
+/.idea/
 Raft_KV_Platform.iml
-target/
+/target/
