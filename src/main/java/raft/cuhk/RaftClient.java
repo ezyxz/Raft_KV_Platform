@@ -2,9 +2,11 @@ package raft.cuhk;
 
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
+import io.grpc.StatusRuntimeException;
 import raft.Raft;
 import raft.RaftNodeGrpc;
 
+import java.net.ConnectException;
 import java.util.concurrent.TimeUnit;
 
 public class RaftClient {
@@ -33,10 +35,16 @@ public class RaftClient {
         return whoAreYouReply.getMsg();
     }
     public static void main(String[] args) throws InterruptedException {
-        RaftClient client = new RaftClient("127.0.0.1", 5000);
+        RaftClient client = new RaftClient("127.0.0.1", 5002);
         //服务调用
-        String content = client.WhoAreYou();
-        //打印调用结果
+        String content = "";
+        try {
+            content = client.WhoAreYou();
+            //打印调用结果
+
+        }catch (StatusRuntimeException e){
+
+        }
         System.out.println(content);
         //关闭连接
         client.shutdown();

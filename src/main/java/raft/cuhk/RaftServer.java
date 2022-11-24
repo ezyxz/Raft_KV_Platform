@@ -19,11 +19,11 @@ public class RaftServer {
     }
 
 
-    public void start() throws IOException {
+    public void start(RaftImpl Node) throws IOException {
         /* The port on which the server should run */
         int port = lport;
         server = ServerBuilder.forPort(port)
-                .addService(new RaftImpl(replication_connection, localhost, lport))  //这里可以添加多个模块
+                .addService(Node)  //这里可以添加多个模块
                 .build()
                 .start();
         System.out.println("Server started, listening on " + port);
