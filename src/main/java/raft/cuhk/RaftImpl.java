@@ -17,6 +17,10 @@ public class RaftImpl extends RaftNodeGrpc.RaftNodeImplBase {
     int electionTimeout;   //ms
     Raft.Role serverState;
     public BlockingQueue<Integer> resetQueue =new LinkedBlockingDeque<>();
+    public BlockingQueue<Integer> electionResetQueue =new LinkedBlockingDeque<>();
+    int currentTerm = 0;
+    int votedFor = -1;
+
 
     public RaftImpl(String[] replication_connection, String localhost, int lport, int nodeId, int heartBeatInterval, int electionTimeout) {
         this.replication_connection = replication_connection;
@@ -40,17 +44,59 @@ public class RaftImpl extends RaftNodeGrpc.RaftNodeImplBase {
 
     @Override
     public void setElectionTimeout(Raft.SetElectionTimeoutArgs request, StreamObserver<Raft.SetElectionTimeoutReply> responseObserver) {
-        super.setElectionTimeout(request, responseObserver);
+        int timeout = request.getTimeout();
+        this.electionTimeout = timeout;
+        try {
+            this.resetQueue.put(99);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        Raft.SetElectionTimeoutReply build = Raft.SetElectionTimeoutReply.newBuilder().build();
+        responseObserver.onNext(build);
+        responseObserver.onCompleted();
+
+
     }
 
     @Override
     public void setHeartBeatInterval(Raft.SetHeartBeatIntervalArgs request, StreamObserver<Raft.SetHeartBeatIntervalReply> responseObserver) {
-        super.setHeartBeatInterval(request, responseObserver);
+        int timeout = request.getInterval();
+        this.heartBeatInterval = timeout;
+        try {
+            this.resetQueue.put(99);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        Raft.SetHeartBeatIntervalReply build = Raft.SetHeartBeatIntervalReply.newBuilder().build();
+        responseObserver.onNext(build);
+        responseObserver.onCompleted();
+
     }
 
     @Override
     public void requestVote(Raft.RequestVoteArgs request, StreamObserver<Raft.RequestVoteReply> responseObserver) {
-        super.requestVote(request, responseObserver);
+        System.out.println(this.nodeId + " recv request vote from "+request.getTerm());
+        int term = request.getTerm();
+        int from = request.getFrom();
+        boolean voteGranted = false;
+        if (term > this.currentTerm){
+            this.currentTerm = term;
+            votedFor = from;
+            voteGranted = true;
+            try {
+                this.resetQueue.put(99);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+        Raft.RequestVoteReply requestVoteReply = Raft.RequestVoteReply.newBuilder()
+                .setTo(from)
+                .setFrom(this.nodeId)
+                .setTerm(this.currentTerm)
+                .setVoteGranted(voteGranted)
+                .build();
+        responseObserver.onNext(requestVoteReply);
+        responseObserver.onCompleted();
     }
 
     @Override
@@ -65,7 +111,9 @@ public class RaftImpl extends RaftNodeGrpc.RaftNodeImplBase {
 
     @Override
     public void whoAreYou(Raft.WhoAreYouArgs request, StreamObserver<Raft.WhoAreYouReply> responseObserver) {
-        Raft.WhoAreYouReply whoAreYouReply = Raft.WhoAreYouReply.newBuilder().setMsg(localhost + ":" + lport).build();
+        Raft.WhoAreYouReply whoAreYouReply = Raft.WhoAreYouReply.newBuilder()
+                .setMsg(localhost + ":" + lport + "| state" + this.serverState + "| votedFor" + this.votedFor).build();
         responseObserver.onNext(whoAreYouReply);
-        responseObserver.onCompleted();    }
+        responseObserver.onCompleted();
+    }
 }

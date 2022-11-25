@@ -3,11 +3,9 @@ package raft.utils;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.StatusRuntimeException;
-import io.grpc.stub.StreamObserver;
 import raft.Raft;
 import raft.RaftNodeGrpc;
 import raft.cuhk.ConnConfig;
-import raft.cuhk.RaftImpl;
 
 public class RaftRpcUtils {
 
@@ -24,7 +22,19 @@ public class RaftRpcUtils {
     public static void setHeartBeatInterval() {
     }
 
-    public static void requestVote() {
+    public static Raft.RequestVoteReply requestVote(ConnConfig connConfig, Raft.RequestVoteArgs requestVoteArgs) {
+        ManagedChannel channel = ManagedChannelBuilder.forAddress(connConfig.ip_address, connConfig.rport)
+                .usePlaintext() // disable TLS
+                .build();
+        RaftNodeGrpc.RaftNodeBlockingStub stub = RaftNodeGrpc.newBlockingStub(channel);
+        Raft.RequestVoteReply requestVoteReply = null;
+        try {
+            requestVoteReply = stub.requestVote(requestVoteArgs);
+        }catch (StatusRuntimeException e){
+
+        }
+        channel.shutdownNow();
+        return requestVoteReply;
     }
 
     public static void appendEntries() {

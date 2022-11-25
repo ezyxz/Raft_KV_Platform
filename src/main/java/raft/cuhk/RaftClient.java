@@ -34,18 +34,28 @@ public class RaftClient {
         //返回值
         return whoAreYouReply.getMsg();
     }
+    public void setElectionTimeOut (int timeOut) {
+        //构造服务调用参数对象
+        Raft.SetElectionTimeoutArgs build = Raft.SetElectionTimeoutArgs.newBuilder().setTimeout(timeOut).build();
+        //调用远程服务方法
+        blockingStub.setElectionTimeout(build);
+        //返回值
+        return;
+    }
+
+
     public static void main(String[] args) throws InterruptedException {
-        RaftClient client = new RaftClient("127.0.0.1", 5002);
+        RaftClient client = new RaftClient("127.0.0.1", 5001);
         //服务调用
         String content = "";
         try {
-            content = client.WhoAreYou();
+            client.setElectionTimeOut(1000);
             //打印调用结果
 
         }catch (StatusRuntimeException e){
 
         }
-        System.out.println(content);
+//        System.out.println(content);
         //关闭连接
         client.shutdown();
     }

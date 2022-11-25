@@ -1,10 +1,6 @@
 package raft.cuhk;
 
-import io.grpc.Channel;
-import io.grpc.ManagedChannel;
-import io.grpc.ManagedChannelBuilder;
 import raft.Raft;
-import raft.RaftNodeGrpc;
 import raft.utils.RaftRpcUtils;
 import java.lang.Object;
 import java.io.*;
@@ -13,6 +9,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class RaftMain {
     static String[] replication_connection;
@@ -28,7 +25,7 @@ public class RaftMain {
         NodeId = Integer.parseInt(args[1]);
         load_config(NodeId);
         System.out.println("Load config successful....");
-        RaftImpl Node = new RaftImpl(replication_connection, localhost, lport, NodeId, 1000 ,1000);
+        RaftImpl Node = new RaftImpl(replication_connection, localhost, lport, NodeId, 1000 ,30000);
         new Thread(new Runnable() {
             @Override
             public void run() {
@@ -37,17 +34,14 @@ public class RaftMain {
         }).start();
         System.out.println("Local Services successful....");
         hostConnectionMap = new HashMap<>();
-        int i = 1;
-        for (String rep : replication_connection){
-            String[] ss = rep.split(":");
+        for (int i = 0; i < replication_connection.length; i++){
+            String[] ss = replication_connection[i].split(":");
             if (localhost.equals(ss[0]) && Integer.parseInt(ss[1]) == lport){
-                i++;
                 continue;
             }
             hostConnectionMap.put(
-                    i, new ConnConfig(ss[0], Integer.parseInt(ss[1]))
+                    i+1, new ConnConfig(ss[0], Integer.parseInt(ss[1]))
             );
-            i++;
         }
         System.out.println("Connection Replication successful....");
         System.out.println("Start running.....");
@@ -56,12 +50,43 @@ public class RaftMain {
             switch (Node.serverState){
                 case Candidate:
                     System.out.println(NodeId + " becomes candidate");
-                    Thread.sleep(5000);
+                    Node.currentTerm++;
+                    Node.votedFor = NodeId;
+                    AtomicReference<Integer> voteNum = new AtomicReference<>(0);
+                    for (int hostId : hostConnectionMap.keySet()){
+                        ConnConfig connConfig = hostConnectionMap.get(hostId);
+                        new Thread(() -> {
+                            System.out.println(NodeId + " ask vote for " + hostId);
+                            Raft.RequestVoteArgs requestVoteArgs = Raft.RequestVoteArgs.newBuilder()
+                                    .setCandidateId(NodeId)
+                                    .setTerm(Node.currentTerm)
+                                    .setTo(hostId)
+                                    .setFrom(NodeId)
+                                    .setLastLogIndex(0)
+                                    .setLastLogTerm(0).build();
+                            Raft.RequestVoteReply requestVoteReply = RaftRpcUtils.requestVote(connConfig, requestVoteArgs);
+                            if (requestVoteReply != null && requestVoteReply.getVoteGranted()){
+                                voteNum.getAndSet(voteNum.get() + 1);
+                                if (voteNum.get() == hostConnectionMap.size()/2 && Node.serverState == Raft.Role.Candidate){
+                                    Node.serverState = Raft.Role.Leader;
+                                    try {
+                                        Node.electionResetQueue.put(99);
+                                    } catch (InterruptedException e) {
+                                        e.printStackTrace();
+                                    }
+                                }
+                            }
+                        }).start();
+                    }
+                    Integer poll = Node.electionResetQueue.poll(Node.electionTimeout, TimeUnit.MILLISECONDS);
+                    if (poll == null){
+                        Node.serverState = Raft.Role.Candidate;
+                    }
                     break;
                 case Follower:
                     System.out.println(NodeId + " becomes follower");
-                    Integer poll = Node.resetQueue.poll(Node.electionTimeout, TimeUnit.MILLISECONDS);
-                    if (poll == null){
+                    Integer poll_f = Node.resetQueue.poll(Node.electionTimeout, TimeUnit.MILLISECONDS);
+                    if (poll_f == null){
                         Node.serverState = Raft.Role.Candidate;
                     }
                     break;
@@ -114,7 +139,6 @@ public class RaftMain {
                     }
                     replication_connection[i-1] = properties.getProperty("replicator"+i);
                 }
-
 
             } catch (FileNotFoundException e) {
                 e.printStackTrace();
