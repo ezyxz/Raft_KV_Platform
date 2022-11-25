@@ -5,15 +5,27 @@ import io.grpc.stub.StreamObserver;
 import raft.Raft;
 import raft.RaftNodeGrpc;
 
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingDeque;
+
 public class RaftImpl extends RaftNodeGrpc.RaftNodeImplBase {
     final String[] replication_connection;
     final String localhost;
     final int lport;
+    int nodeId;
+    int heartBeatInterval;  //ms
+    int electionTimeout;   //ms
+    Raft.Role serverState;
+    public BlockingQueue<Integer> resetQueue =new LinkedBlockingDeque<>();
 
-    public RaftImpl(String[] replication_connection, String localhost, int lport) {
+    public RaftImpl(String[] replication_connection, String localhost, int lport, int nodeId, int heartBeatInterval, int electionTimeout) {
         this.replication_connection = replication_connection;
         this.localhost = localhost;
         this.lport = lport;
+        this.nodeId = nodeId;
+        this.heartBeatInterval = heartBeatInterval;
+        this.electionTimeout = electionTimeout;
+        this.serverState = Raft.Role.Follower;
     }
 
     @Override

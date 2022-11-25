@@ -6,10 +6,13 @@ import io.grpc.ManagedChannelBuilder;
 import raft.Raft;
 import raft.RaftNodeGrpc;
 import raft.utils.RaftRpcUtils;
-
+import java.lang.Object;
 import java.io.*;
 import java.net.URL;
-import java.util.*;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Properties;
+import java.util.concurrent.TimeUnit;
 
 public class RaftMain {
     static String[] replication_connection;
@@ -25,7 +28,7 @@ public class RaftMain {
         NodeId = Integer.parseInt(args[1]);
         load_config(NodeId);
         System.out.println("Load config successful....");
-        RaftImpl Node = new RaftImpl(replication_connection, localhost, lport);
+        RaftImpl Node = new RaftImpl(replication_connection, localhost, lport, NodeId, 1000 ,1000);
         new Thread(new Runnable() {
             @Override
             public void run() {
@@ -41,28 +44,44 @@ public class RaftMain {
                 i++;
                 continue;
             }
-//            ManagedChannel channel = ManagedChannelBuilder.forAddress(ss[0], Integer.parseInt(ss[1]))
-//                    .usePlaintext() // disable TLS
-//                    .build();
-
             hostConnectionMap.put(
                     i, new ConnConfig(ss[0], Integer.parseInt(ss[1]))
             );
             i++;
         }
         System.out.println("Connection Replication successful....");
+        System.out.println("Start running.....");
+        while(true){
 
-        Thread.sleep(15000);
-        for (int j = 0; j < 100000; j++) {
-            for (ConnConfig connConfig: hostConnectionMap.values()){
-                Raft.WhoAreYouArgs whoAreYouArgs = Raft.WhoAreYouArgs.newBuilder().setMsg("hello").build();
-                Raft.WhoAreYouReply whoAreYouReply = RaftRpcUtils.whoAreYou(connConfig, whoAreYouArgs);
-                if (whoAreYouReply != null)
-                    System.out.println(whoAreYouReply.getMsg() + " " + j);
+            switch (Node.serverState){
+                case Candidate:
+                    System.out.println(NodeId + " becomes candidate");
+                    Thread.sleep(5000);
+                    break;
+                case Follower:
+                    System.out.println(NodeId + " becomes follower");
+                    Integer poll = Node.resetQueue.poll(Node.electionTimeout, TimeUnit.MILLISECONDS);
+                    if (poll == null){
+                        Node.serverState = Raft.Role.Candidate;
+                    }
+                    break;
+
+                case Leader:
+                    System.out.println(NodeId + " becomes leader");
+                    Thread.sleep(5000);
+                    break;
             }
-//            Thread.sleep(10);
         }
 
+//        Thread.sleep(15000);
+//        for (int j = 0; j < 100000; j++) {
+//            for (ConnConfig connConfig: hostConnectionMap.values()){
+//                Raft.WhoAreYouArgs whoAreYouArgs = Raft.WhoAreYouArgs.newBuilder().setMsg("hello").build();
+//                Raft.WhoAreYouReply whoAreYouReply = RaftRpcUtils.whoAreYou(connConfig, whoAreYouArgs);
+//                if (whoAreYouReply != null)
+//                    System.out.println(whoAreYouReply.getMsg() + " " + j);
+//            }
+//        }
     }
 
     static void start_service(RaftImpl Node){
