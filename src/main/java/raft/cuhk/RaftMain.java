@@ -1,9 +1,11 @@
 package raft.cuhk;
 
 import io.grpc.Channel;
+import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import raft.Raft;
 import raft.RaftNodeGrpc;
+import raft.utils.RaftRpcUtils;
 
 import java.io.*;
 import java.net.URL;
@@ -14,7 +16,7 @@ public class RaftMain {
     static String localhost;
     static int lport;
     static RaftServer server;
-    static Set<RaftNodeGrpc.RaftNodeBlockingStub> hostConnectionMap;
+    static Map<Integer, ConnConfig> hostConnectionMap;
     static int NodeId;
 
 
@@ -31,38 +33,35 @@ public class RaftMain {
             }
         }).start();
         System.out.println("Local Services successful....");
-        hostConnectionMap = new HashSet<>();
+        hostConnectionMap = new HashMap<>();
+        int i = 1;
         for (String rep : replication_connection){
             String[] ss = rep.split(":");
             if (localhost.equals(ss[0]) && Integer.parseInt(ss[1]) == lport){
+                i++;
                 continue;
             }
-            Channel channel = ManagedChannelBuilder.forAddress(ss[0], Integer.parseInt(ss[1]))
-                    .usePlaintext() // disable TLS
-                    .build();
+//            ManagedChannel channel = ManagedChannelBuilder.forAddress(ss[0], Integer.parseInt(ss[1]))
+//                    .usePlaintext() // disable TLS
+//                    .build();
 
-            hostConnectionMap.add(
-                    RaftNodeGrpc.newBlockingStub(channel)
+            hostConnectionMap.put(
+                    i, new ConnConfig(ss[0], Integer.parseInt(ss[1]))
             );
+            i++;
         }
         System.out.println("Connection Replication successful....");
 
         Thread.sleep(15000);
-
-        for (RaftNodeGrpc.RaftNodeBlockingStub stub : hostConnectionMap){
-            //构造服务调用参数对象
-            Raft.WhoAreYouArgs whoAreYouArgs = Raft.WhoAreYouArgs.newBuilder().setMsg("hello").build();
-            //调用远程服务方法
-            Raft.WhoAreYouReply whoAreYouReply = stub.whoAreYou(whoAreYouArgs);
-            //返回值
-            System.out.println(whoAreYouReply.getMsg());
-            //
-
-
+        for (int j = 0; j < 100000; j++) {
+            for (ConnConfig connConfig: hostConnectionMap.values()){
+                Raft.WhoAreYouArgs whoAreYouArgs = Raft.WhoAreYouArgs.newBuilder().setMsg("hello").build();
+                Raft.WhoAreYouReply whoAreYouReply = RaftRpcUtils.whoAreYou(connConfig, whoAreYouArgs);
+                if (whoAreYouReply != null)
+                    System.out.println(whoAreYouReply.getMsg() + " " + j);
+            }
+//            Thread.sleep(10);
         }
-
-
-
 
     }
 
