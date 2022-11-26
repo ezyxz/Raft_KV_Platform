@@ -75,14 +75,16 @@ public class RaftImpl extends RaftNodeGrpc.RaftNodeImplBase {
 
     @Override
     public void requestVote(Raft.RequestVoteArgs request, StreamObserver<Raft.RequestVoteReply> responseObserver) {
-        System.out.println(this.nodeId + " recv request vote from "+request.getTerm());
+        System.out.println(this.nodeId + " at term " + this.currentTerm + " recv request vote from "+request.getFrom() + " at " + request.getTerm());
         int term = request.getTerm();
         int from = request.getFrom();
         boolean voteGranted = false;
         if (term > this.currentTerm){
-            this.currentTerm = term;
+            System.out.println(this.nodeId + " at term " + this.currentTerm + " voted for "+request.getFrom() + " at " + request.getTerm());
+//            this.currentTerm = term;
             votedFor = from;
             voteGranted = true;
+            this.serverState = Raft.Role.Follower;
             try {
                 this.resetQueue.put(99);
             } catch (InterruptedException e) {
@@ -101,7 +103,20 @@ public class RaftImpl extends RaftNodeGrpc.RaftNodeImplBase {
 
     @Override
     public void appendEntries(Raft.AppendEntriesArgs request, StreamObserver<Raft.AppendEntriesReply> responseObserver) {
-        super.appendEntries(request, responseObserver);
+        int from = request.getFrom();
+        int leaderId = request.getLeaderId();
+        int term = request.getTerm();
+        int to = request.getTo();
+        System.out.println(this.nodeId + " recv appendEntries from " + from + " at " + term);
+        this.currentTerm = term;
+        try {
+            this.resetQueue.put(99);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        Raft.AppendEntriesReply appendEntriesReply = Raft.AppendEntriesReply.newBuilder().build();
+        responseObserver.onNext(appendEntriesReply);
+        responseObserver.onCompleted();
     }
 
     @Override

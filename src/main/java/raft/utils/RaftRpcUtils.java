@@ -37,7 +37,20 @@ public class RaftRpcUtils {
         return requestVoteReply;
     }
 
-    public static void appendEntries() {
+    public static Raft.AppendEntriesReply appendEntries(ConnConfig connConfig, Raft.AppendEntriesArgs appendEntriesArgs) {
+        ManagedChannel channel = ManagedChannelBuilder.forAddress(connConfig.ip_address, connConfig.rport)
+                .usePlaintext() // disable TLS
+                .build();
+        RaftNodeGrpc.RaftNodeBlockingStub stub = RaftNodeGrpc.newBlockingStub(channel);
+        Raft.AppendEntriesReply appendEntriesReply = null;
+        try {
+            appendEntriesReply = stub.appendEntries(appendEntriesArgs);
+        }catch (StatusRuntimeException e){
+
+        }
+        channel.shutdownNow();
+        return appendEntriesReply;
+
     }
 
     public static void checkEvents() {
