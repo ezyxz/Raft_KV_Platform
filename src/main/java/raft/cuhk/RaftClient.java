@@ -42,14 +42,28 @@ public class RaftClient {
         //返回值
         return;
     }
+    public void testInsert(){
+        Raft.ProposeArgs proposeArgs = Raft.ProposeArgs.newBuilder()
+                .setKey("admin2")
+                .setV(999)
+                .setOp(Raft.Operation.Put).build();
+        Raft.ProposeReply reply = blockingStub.propose(proposeArgs);
+        System.out.println(reply.getStatus());
+    }
+
+    public void testGetValue(){
+        Raft.GetValueArgs admin = Raft.GetValueArgs.newBuilder().setKey("admin2").build();
+        Raft.GetValueReply value = blockingStub.getValue(admin);
+        System.out.println(value.getStatus() + " " + value.getV());
+    }
 
 
     public static void main(String[] args) throws InterruptedException {
-        RaftClient client = new RaftClient("127.0.0.1", 5001);
+        RaftClient client = new RaftClient("127.0.0.1", 5002);
         //服务调用
         String content = "";
         try {
-            client.setElectionTimeOut(1000);
+            client.testGetValue();
             //打印调用结果
 
         }catch (StatusRuntimeException e){

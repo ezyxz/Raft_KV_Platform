@@ -1,6 +1,7 @@
 package raft.cuhk;
 
 import raft.Raft;
+import raft.utils.Param;
 import raft.utils.RaftRpcUtils;
 import java.lang.Object;
 import java.io.*;
@@ -18,6 +19,7 @@ public class RaftMain {
     static RaftServer server;
     static Map<Integer, ConnConfig> hostConnectionMap;
     static int NodeId;
+    static Object lock = new Object();
 
 
     public static void main(String[] args) throws InterruptedException {
@@ -72,7 +74,7 @@ public class RaftMain {
                                 if (voteNum.get() == hostConnectionMap.size()/2 && Node.serverState == Raft.Role.Candidate){
                                     Node.serverState = Raft.Role.Leader;
                                     try {
-                                        Node.resetQueue.put(88);
+                                        Node.resetQueue.put(Param.REST_BECOME_LEADER);
                                     } catch (InterruptedException e) {
                                         e.printStackTrace();
                                     }
@@ -82,9 +84,7 @@ public class RaftMain {
                     }
                     Integer poll = Node.resetQueue.poll(Node.electionTimeout, TimeUnit.MILLISECONDS);
                     if (poll != null){
-                        if (poll == 88){
-
-                        }else if (poll == 99){
+                        if (poll == Param.REST_ALREADY_VOTED){
                             Node.serverState = Raft.Role.Follower;
                         }
                         //Time out
@@ -92,6 +92,8 @@ public class RaftMain {
                         Node.electionTimeout = 3000 + (int)(Math.random()*1000);
                         System.out.println(NodeId + " reset electionTimeout as " + Node.electionTimeout);
                     }
+
+
                     break;
 
                 case Follower:
@@ -126,18 +128,48 @@ public class RaftMain {
                             continue;
                         }
                         System.out.println("Normal heart beat interval");
+                        int leaderCommit = Node.commitIndex;
+
                         for (int hostId : hostConnectionMap.keySet()){
                             ConnConfig connConfig = hostConnectionMap.get(hostId);
+
                             new Thread(() -> {
-                                Raft.AppendEntriesArgs appendEntriesArgs = Raft.AppendEntriesArgs.newBuilder()
-                                        .setFrom(Node.nodeId)
-                                        .setLeaderId(Node.nodeId)
-                                        .setTo(hostId)
-                                        .setTerm(Node.currentTerm)
-                                        .setPrevLogTerm(0)
-                                        .setPrevLogTerm(0)
-                                        .build();
-                                RaftRpcUtils.appendEntries(connConfig, appendEntriesArgs);
+                                Raft.AppendEntriesArgs appendEntriesArgs;
+                                if (Node.commitIndex < Node.log.size()){
+                                    System.out.println("send entry");
+                                    appendEntriesArgs = Raft.AppendEntriesArgs.newBuilder()
+                                            .setFrom(Node.nodeId)
+                                            .setLeaderId(Node.nodeId)
+                                            .setTo(hostId)
+                                            .setTerm(Node.currentTerm)
+                                            .setPrevLogTerm(Node.lastLogTerm)
+                                            .setPrevLogIndex(Node.log.size()-1)
+                                            .addEntries( Node.log.get(Node.commitIndex))
+                                            .setLeaderCommit(Node.commitIndex)
+                                            .build();
+                                }else{
+                                    appendEntriesArgs = Raft.AppendEntriesArgs.newBuilder()
+                                            .setFrom(Node.nodeId)
+                                            .setLeaderId(Node.nodeId)
+                                            .setTo(hostId)
+                                            .setTerm(Node.currentTerm)
+                                            .setPrevLogTerm(Node.lastLogTerm)
+                                            .setPrevLogIndex(Node.log.size()-1)
+                                            .setLeaderCommit(Node.commitIndex)
+                                            .build();
+                                }
+
+                                Raft.AppendEntriesReply appendEntriesReply = RaftRpcUtils.appendEntries(connConfig, appendEntriesArgs);
+                                int successNum = 0;
+                                if (appendEntriesReply != null && appendEntriesReply.getSuccess() && Node.commitIndex < Node.log.size()){
+                                    synchronized (lock){
+                                        System.out.println("success !!!!");
+                                        successNum++;
+                                        if (successNum == hostConnectionMap.size()/2 &&  Node.semaphoreMap.get(leaderCommit) != null){
+                                            Node.semaphoreMap.get(leaderCommit).release();
+                                        }
+                                    }
+                                }
                             }).start();
                         }
                     }
