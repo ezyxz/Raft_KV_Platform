@@ -219,8 +219,8 @@ public class RaftImpl extends RaftNodeGrpc.RaftNodeImplBase {
             }
 
             int lastLogIdx = this.log.size() - 1 ;
-
-            if (request.getPrevLogIndex() - request.getEntriesList().size() != lastLogIdx || ( lastLogIdx > -1 && request.getPrevLogTerm() != this.log.get(lastLogIdx).getTerm())){
+            //|| ( lastLogIdx > -1 && request.getPrevLogTerm() != this.log.get(lastLogIdx).getTerm()
+            if (request.getPrevLogIndex() - request.getEntriesList().size() != lastLogIdx ){
                 System.out.println("unmatch prev log");
                 Raft.AppendEntriesReply appendEntriesReply = Raft.AppendEntriesReply.newBuilder()
                         .setFrom(nodeId)

@@ -44,7 +44,7 @@ public class RaftClient {
     }
     public void testInsert(){
         Raft.ProposeArgs proposeArgs = Raft.ProposeArgs.newBuilder()
-                .setKey("admin1")
+                .setKey("admin3")
                 .setV(999)
                 .setOp(Raft.Operation.Put).build();
         Raft.ProposeReply reply = blockingStub.propose(proposeArgs);
@@ -52,7 +52,7 @@ public class RaftClient {
     }
 
     public void testGetValue(){
-        Raft.GetValueArgs admin = Raft.GetValueArgs.newBuilder().setKey("admin1").build();
+        Raft.GetValueArgs admin = Raft.GetValueArgs.newBuilder().setKey("admin3").build();
         Raft.GetValueReply value = blockingStub.getValue(admin);
         System.out.println(value.getStatus() + " " + value.getV());
     }
