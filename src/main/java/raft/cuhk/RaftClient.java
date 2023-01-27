@@ -59,7 +59,7 @@ public class RaftClient {
 
 
     public static void main(String[] args) throws InterruptedException {
-        RaftClient client = new RaftClient("127.0.0.1", 5003);
+        RaftClient client = new RaftClient("192.168.10.103", 5002);
         //服务调用
         String content = "";
         try {
