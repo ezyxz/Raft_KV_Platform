@@ -118,6 +118,7 @@ public class RaftMain {
                                     .setTerm(Node.currentTerm)
                                     .setPrevLogTerm(0)
                                     .setPrevLogTerm(0)
+                                    .setLeaderCommit(Node.commitIndex)
                                     .build();
                             RaftRpcUtils.appendEntries(connConfig, appendEntriesArgs);
                         }).start();
@@ -135,40 +136,72 @@ public class RaftMain {
 
                             new Thread(() -> {
                                 Raft.AppendEntriesArgs appendEntriesArgs;
-                                if (Node.commitIndex < Node.log.size()){
-                                    System.out.println("send entry");
-                                    appendEntriesArgs = Raft.AppendEntriesArgs.newBuilder()
-                                            .setFrom(Node.nodeId)
-                                            .setLeaderId(Node.nodeId)
-                                            .setTo(hostId)
-                                            .setTerm(Node.currentTerm)
-                                            .setPrevLogTerm(Node.lastLogTerm)
-                                            .setPrevLogIndex(Node.log.size()-1)
-                                            .addEntries( Node.log.get(Node.commitIndex))
-                                            .setLeaderCommit(Node.commitIndex)
-                                            .build();
-                                }else{
-                                    appendEntriesArgs = Raft.AppendEntriesArgs.newBuilder()
-                                            .setFrom(Node.nodeId)
-                                            .setLeaderId(Node.nodeId)
-                                            .setTo(hostId)
-                                            .setTerm(Node.currentTerm)
-                                            .setPrevLogTerm(Node.lastLogTerm)
-                                            .setPrevLogIndex(Node.log.size()-1)
-                                            .setLeaderCommit(Node.commitIndex)
-                                            .build();
+                                if (Node.NodeLogMatch.containsKey((hostId))){
+                                    int prevlog = Node.NodeLogMatch.get(hostId);
+                                    System.out.println("Leader send prev logs");
+                                    if (prevlog < 0){
+                                        appendEntriesArgs = Raft.AppendEntriesArgs.newBuilder()
+                                                .setFrom(Node.nodeId)
+                                                .setLeaderId(Node.nodeId)
+                                                .setTo(hostId)
+                                                .setTerm(Node.currentTerm)
+                                                .setPrevLogIndex(Node.log.size()-1)
+                                                .setPrevLogTerm(0)
+                                                .addAllEntries(Node.log)
+                                                .setLeaderCommit(Node.commitIndex)
+                                                .build();
+                                    }else{
+                                        appendEntriesArgs = Raft.AppendEntriesArgs.newBuilder()
+                                                .setFrom(Node.nodeId)
+                                                .setLeaderId(Node.nodeId)
+                                                .setTo(hostId)
+                                                .setTerm(Node.currentTerm)
+                                                .setPrevLogIndex(Node.log.size()-1)
+                                                .setLeaderCommit(Node.commitIndex)
+                                                .setPrevLogTerm(Node.log.get(prevlog).getTerm())
+                                                .addAllEntries(Node.log.subList(prevlog, Node.log.size()))
+                                                .build();
+                                    }
+
+                                    Node.NodeLogMatch.remove(hostId);
+                                }else {
+                                    if (Node.commitIndex < Node.log.size()-1) {
+                                        System.out.println("send new logs");
+                                        appendEntriesArgs = Raft.AppendEntriesArgs.newBuilder()
+                                                .setFrom(Node.nodeId)
+                                                .setLeaderId(Node.nodeId)
+                                                .setTo(hostId)
+                                                .setTerm(Node.currentTerm)
+                                                .setPrevLogTerm(Node.lastLogTerm)
+                                                .setPrevLogIndex(Node.log.size() - 1)
+                                                .addEntries(Node.log.get(Node.commitIndex+1))
+                                                .setLeaderCommit(Node.commitIndex)
+                                                .build();
+                                    } else {
+                                        appendEntriesArgs = Raft.AppendEntriesArgs.newBuilder()
+                                                .setFrom(Node.nodeId)
+                                                .setLeaderId(Node.nodeId)
+                                                .setTo(hostId)
+                                                .setTerm(Node.currentTerm)
+                                                .setPrevLogTerm(Node.lastLogTerm)
+                                                .setPrevLogIndex(Node.log.size() - 1)
+                                                .setLeaderCommit(Node.commitIndex)
+                                                .build();
+                                    }
                                 }
 
                                 Raft.AppendEntriesReply appendEntriesReply = RaftRpcUtils.appendEntries(connConfig, appendEntriesArgs);
                                 int successNum = 0;
-                                if (appendEntriesReply != null && appendEntriesReply.getSuccess() && Node.commitIndex < Node.log.size()){
+                                if (appendEntriesReply != null && appendEntriesReply.getSuccess() && Node.commitIndex < Node.log.size()-1){
                                     synchronized (lock){
-                                        System.out.println("success !!!!");
+                                        System.out.println("Leader commit get majority votes");
                                         successNum++;
                                         if (successNum == hostConnectionMap.size()/2 &&  Node.semaphoreMap.get(leaderCommit) != null){
                                             Node.semaphoreMap.get(leaderCommit).release();
                                         }
                                     }
+                                }else if(appendEntriesReply != null && !appendEntriesReply.getSuccess()){
+                                    Node.NodeLogMatch.put(appendEntriesReply.getFrom(), appendEntriesReply.getMatchIndex());
                                 }
                             }).start();
                         }

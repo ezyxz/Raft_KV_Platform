@@ -24,7 +24,7 @@ public class RaftImpl extends RaftNodeGrpc.RaftNodeImplBase {
     int heartBeatInterval;  //ms
     int electionTimeout;   //ms
     Raft.Role serverState;
-    int commitIndex = 0;
+    int commitIndex = -1;
     int LeaderCommit = 0;
     public BlockingQueue<Integer> resetQueue =new LinkedBlockingDeque<>();
     public BlockingQueue<Integer> electionResetQueue =new LinkedBlockingDeque<>();
@@ -34,6 +34,7 @@ public class RaftImpl extends RaftNodeGrpc.RaftNodeImplBase {
     Map<String, Integer> kvstore = new ConcurrentHashMap<>();
     Map<Integer, Semaphore> semaphoreMap = new ConcurrentHashMap<>();
     List<Raft.LogEntry> log = new ArrayList<>();
+    public Map<Integer, Integer> NodeLogMatch = new ConcurrentHashMap<>();
     int lastLogTerm = 0;
 
     public RaftImpl(String[] replication_connection, String localhost, int lport, int nodeId, int heartBeatInterval, int electionTimeout) {
@@ -70,7 +71,7 @@ public class RaftImpl extends RaftNodeGrpc.RaftNodeImplBase {
                     .setOp(request.getOp())
                     .setKey(request.getKey())
                     .setValue(request.getV()).build();
-            int log_idx = log.size();
+            int log_idx = this.commitIndex;
             log.add(build);
             System.out.println("Add to log, waiting to commit...");
             Semaphore semaphore = new Semaphore(0);
@@ -196,6 +197,7 @@ public class RaftImpl extends RaftNodeGrpc.RaftNodeImplBase {
             int term = request.getTerm();
             int to = request.getTo();
             System.out.println(this.nodeId + " recv appendEntries from " + from + " at " + term);
+            System.out.println(this.nodeId + " " +request.getLeaderCommit() +" | " + request.getPrevLogIndex() + "|" + request.getEntriesList().size() );
             if ( term < this.currentTerm){
                 Raft.AppendEntriesReply appendEntriesReply = Raft.AppendEntriesReply.newBuilder()
                         .setFrom(nodeId)
@@ -217,17 +219,19 @@ public class RaftImpl extends RaftNodeGrpc.RaftNodeImplBase {
             }
 
             int lastLogIdx = this.log.size() - 1 ;
-            if (request.getPrevLogIndex() < lastLogIdx || ( lastLogIdx > -1 && request.getPrevLogTerm() != this.log.get(lastLogIdx).getTerm())){
+
+            if (request.getPrevLogIndex() - request.getEntriesList().size() != lastLogIdx || ( lastLogIdx > -1 && request.getPrevLogTerm() != this.log.get(lastLogIdx).getTerm())){
+                System.out.println("unmatch prev log");
                 Raft.AppendEntriesReply appendEntriesReply = Raft.AppendEntriesReply.newBuilder()
                         .setFrom(nodeId)
                         .setTerm(this.currentTerm)
+                        .setMatchIndex(lastLogIdx)
                         .setSuccess(false).build();
                 responseObserver.onNext(appendEntriesReply);
                 responseObserver.onCompleted();
                 return;
             }
             rSuccess = true;
-            System.out.println("add log entry success");
             List<Raft.LogEntry> entries = request.getEntriesList();
 //            int index = request.getPrevLogIndex();
 //            for (Raft.LogEntry entry : entries) {
@@ -241,11 +245,16 @@ public class RaftImpl extends RaftNodeGrpc.RaftNodeImplBase {
 //                this.log.addAll(entries);
 //                break;
 //            }
-            this.log.addAll(entries);
-            //commit
-            System.out.println("localcommit " + this.commitIndex + "leadercommit "+ request.getLeaderCommit());
-            while (this.commitIndex < request.getLeaderCommit()){
+            if (entries.size() > 0){
+                this.log.addAll(entries);
+                System.out.println("Add log entry successful");
+            }
 
+            //commit
+//            System.out.println("localcommit " + this.commitIndex + "leadercommit "+ request.getLeaderCommit());
+            while (commitIndex < log.size() - 1 &&  this.commitIndex < request.getLeaderCommit()){
+                commitIndex++;
+                System.out.println("commit success at commit index"+commitIndex);
                 if (log.get(commitIndex).getOp() == Raft.Operation.Put){
                     this.kvstore.put(log.get(commitIndex).getKey(), log.get(commitIndex).getValue());
                 }else{
@@ -253,7 +262,7 @@ public class RaftImpl extends RaftNodeGrpc.RaftNodeImplBase {
                         this.kvstore.remove(log.get(commitIndex).getKey());
                     }
                 }
-                commitIndex++;
+
             }
             try {
                 this.resetQueue.put(Param.REST_ELECTION_TIME_OUT);

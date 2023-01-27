@@ -44,7 +44,7 @@ public class RaftClient {
     }
     public void testInsert(){
         Raft.ProposeArgs proposeArgs = Raft.ProposeArgs.newBuilder()
-                .setKey("admin2")
+                .setKey("admin1")
                 .setV(999)
                 .setOp(Raft.Operation.Put).build();
         Raft.ProposeReply reply = blockingStub.propose(proposeArgs);
@@ -52,14 +52,14 @@ public class RaftClient {
     }
 
     public void testGetValue(){
-        Raft.GetValueArgs admin = Raft.GetValueArgs.newBuilder().setKey("admin2").build();
+        Raft.GetValueArgs admin = Raft.GetValueArgs.newBuilder().setKey("admin1").build();
         Raft.GetValueReply value = blockingStub.getValue(admin);
         System.out.println(value.getStatus() + " " + value.getV());
     }
 
 
     public static void main(String[] args) throws InterruptedException {
-        RaftClient client = new RaftClient("127.0.0.1", 5002);
+        RaftClient client = new RaftClient("127.0.0.1", 5003);
         //服务调用
         String content = "";
         try {
