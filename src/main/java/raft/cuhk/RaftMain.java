@@ -233,15 +233,37 @@ public class RaftMain {
 
     }
     static void load_config(int nodeId){
-        URL url = RaftMain.class.getClassLoader().getResource("config.properties");
-        if (url != null) {
-            String fileName = url.getFile();
-            InputStream in = null;
-            try {
-                in = new BufferedInputStream(new FileInputStream(fileName));
-                Properties properties = new Properties();
-                properties.load(in);
-                int conn = Integer.parseInt(properties.getProperty("replication"));
+//        URL url = RaftMain.class.getClassLoader().getResource("config.properties");
+//        if (url != null) {
+//            String fileName = url.getFile();
+//            InputStream in = null;
+//            try {
+//                in = new BufferedInputStream(new FileInputStream(fileName));
+//                Properties properties = new Properties();
+//                properties.load(in);
+//                int conn = Integer.parseInt(properties.getProperty("replication"));
+//                replication_connection = new String[conn];
+//                for (int i = 1; i <= conn; i++) {
+//                    if (nodeId == i){
+//                        String[] ss = properties.getProperty("replicator"+i).split(":");
+//                        localhost = ss[0];
+//                        lport = Integer.parseInt(ss[1]);
+//                    }
+//                    replication_connection[i-1] = properties.getProperty("replicator"+i);
+//                }
+//
+//            } catch (FileNotFoundException e) {
+//                e.printStackTrace();
+//            } catch (IOException e) {
+//                e.printStackTrace();
+//            }
+
+//        }
+        try {
+            BufferedReader bufferedReader = new BufferedReader(new FileReader("src/main/resources/config.properties"));
+            Properties properties = new Properties();
+            properties.load(bufferedReader);
+            int conn = Integer.parseInt(properties.getProperty("replication"));
                 replication_connection = new String[conn];
                 for (int i = 1; i <= conn; i++) {
                     if (nodeId == i){
@@ -251,13 +273,11 @@ public class RaftMain {
                     }
                     replication_connection[i-1] = properties.getProperty("replicator"+i);
                 }
-
-            } catch (FileNotFoundException e) {
-                e.printStackTrace();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
         }
+
     }
 }
