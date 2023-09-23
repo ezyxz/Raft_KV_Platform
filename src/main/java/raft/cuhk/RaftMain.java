@@ -260,7 +260,8 @@ public class RaftMain {
 
 //        }
         try {
-            BufferedReader bufferedReader = new BufferedReader(new FileReader("src/main/resources/config.properties"));
+//            BufferedReader bufferedReader = new BufferedReader(new FileReader("src/main/resources/config.properties"));
+            BufferedReader bufferedReader = new BufferedReader(new FileReader("../conf/config.properties"));
             Properties properties = new Properties();
             properties.load(bufferedReader);
             int conn = Integer.parseInt(properties.getProperty("replication"));

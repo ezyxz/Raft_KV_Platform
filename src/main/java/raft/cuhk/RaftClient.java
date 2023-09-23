@@ -58,19 +58,34 @@ public class RaftClient {
     }
 
 
-    public static void main(String[] args) throws InterruptedException {
-        RaftClient client = new RaftClient("192.168.10.103", 5002);
-        //服务调用
-        String content = "";
-        try {
-            client.testGetValue();
-            //打印调用结果
+    public Raft.GetValueReply getValue(String key){
+        Raft.GetValueArgs getValueArgs = Raft.GetValueArgs.newBuilder().setKey(key).build();
+        Raft.GetValueReply value = blockingStub.getValue(getValueArgs);
+        return value;
+    }
+    public Raft.ProposeReply putValue(String key, int value){
+        Raft.ProposeArgs proposeArgs = Raft.ProposeArgs.newBuilder()
+                .setKey(key)
+                .setV(value)
+                .setOp(Raft.Operation.Put).build();
+        Raft.ProposeReply reply = blockingStub.propose(proposeArgs);
+        return reply;
+    }
 
-        }catch (StatusRuntimeException e){
 
-        }
-//        System.out.println(content);
-        //关闭连接
-        client.shutdown();
+
+    public Raft.WhoAreYouReply whoAreYou(){
+        Raft.WhoAreYouArgs build = Raft.WhoAreYouArgs.newBuilder().build();
+
+        Raft.WhoAreYouReply whoAreYouReply = blockingStub.whoAreYou(build);
+        return whoAreYouReply;
+    }
+
+    public Raft.ProposeReply deleteValue(String key){
+        Raft.ProposeArgs proposeArgs = Raft.ProposeArgs.newBuilder()
+                .setKey(key)
+                .setOp(Raft.Operation.Delete).build();
+        Raft.ProposeReply reply = blockingStub.propose(proposeArgs);
+        return reply;
     }
 }

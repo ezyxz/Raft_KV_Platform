@@ -36,6 +36,7 @@ public class RaftImpl extends RaftNodeGrpc.RaftNodeImplBase {
     List<Raft.LogEntry> log = new ArrayList<>();
     public Map<Integer, Integer> NodeLogMatch = new ConcurrentHashMap<>();
     int lastLogTerm = 0;
+    String leaderAddress;
 
     public RaftImpl(String[] replication_connection, String localhost, int lport, int nodeId, int heartBeatInterval, int electionTimeout) {
         this.replication_connection = replication_connection;
@@ -207,6 +208,7 @@ public class RaftImpl extends RaftNodeGrpc.RaftNodeImplBase {
                 responseObserver.onCompleted();
                 return;
             }
+            votedFor = from;
             if (term > this.currentTerm){
                 this.currentTerm = term;
                 rterm = term;
@@ -291,7 +293,8 @@ public class RaftImpl extends RaftNodeGrpc.RaftNodeImplBase {
     @Override
     public void whoAreYou(Raft.WhoAreYouArgs request, StreamObserver<Raft.WhoAreYouReply> responseObserver) {
         Raft.WhoAreYouReply whoAreYouReply = Raft.WhoAreYouReply.newBuilder()
-                .setMsg(localhost + ":" + lport + "| state" + this.serverState + "| votedFor" + this.votedFor).build();
+                .setMsg(localhost + ":" + lport + "| state" + this.serverState + "| votedFor " + this.votedFor+ " |leader>>"+replication_connection[votedFor-1])
+                .build();
         responseObserver.onNext(whoAreYouReply);
         responseObserver.onCompleted();
     }
