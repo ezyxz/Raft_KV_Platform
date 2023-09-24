@@ -58,7 +58,7 @@ public class RaftClientMain {
                     System.out.println("unknown query");
                     continue;
                 }
-                Raft.ProposeReply reply = raftClient.putValue(ss[1], Integer.parseInt(ss[2]));
+                Raft.ProposeReply reply = raftClient.putValue(ss[1], ss[2]);
                 System.out.println(reply.getStatus());
 
             }else if (input.startsWith("get")) {

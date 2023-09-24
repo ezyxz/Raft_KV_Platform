@@ -1,6 +1,7 @@
 # Raft_KV_Platform
 
 # 快速开始
+下载，解压RaftKV-2.2.tar.gz
 
 1.配置conf目录下文件config.properties
 
@@ -47,3 +48,21 @@ nodeid:1
 
 使用-d 会连接特定的，不管是不是leader
 
+5.CLI使用
+输入put k v
+```shell
+put raft hello
+OK
+```
+输入get raft
+```shell
+get raft
+KeyFound | hello
+```
+输入get delete
+```shell
+delete raft
+OK
+```
+RaftKV-2.2.tar.gz
+项目成品可以直接用

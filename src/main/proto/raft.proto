@@ -97,7 +97,7 @@ message CheckEventsReply{
 message ProposeArgs{
     Operation Op = 1;
     string key = 2;
-    int32 V = 3;
+    string V = 3;
 }
 
 enum Role {
@@ -134,7 +134,7 @@ message GetValueArgs{
 }
 
 message GetValueReply{
-    int32 V = 1;
+    string V = 1;
     Status Status = 2;
 }
 
@@ -142,7 +142,7 @@ message LogEntry{
     int32 Term = 1;
     Operation Op = 2;
     string Key = 3;
-    int32 Value = 4;
+    string Value = 4;
 }
 
 message RequestVoteArgs{

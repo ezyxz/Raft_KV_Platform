@@ -31,7 +31,7 @@ public class RaftImpl extends RaftNodeGrpc.RaftNodeImplBase {
     Object lock = new Object();
     int currentTerm = 0;
     int votedFor = -1;
-    Map<String, Integer> kvstore = new ConcurrentHashMap<>();
+    Map<String, String> kvstore = new ConcurrentHashMap<>();
     Map<Integer, Semaphore> semaphoreMap = new ConcurrentHashMap<>();
     List<Raft.LogEntry> log = new ArrayList<>();
     public Map<Integer, Integer> NodeLogMatch = new ConcurrentHashMap<>();
