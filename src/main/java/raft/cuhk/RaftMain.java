@@ -5,11 +5,11 @@ import raft.utils.Param;
 import raft.utils.RaftRpcUtils;
 import java.lang.Object;
 import java.io.*;
-import java.net.URL;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class RaftMain {
@@ -52,14 +52,14 @@ public class RaftMain {
             switch (Node.serverState){
 
                 case Candidate:
-                    System.out.println(NodeId + " becomes candidate at " + Node.currentTerm);
+                    System.out.println(NodeId + " becomes candidate at Term" + Node.currentTerm);
                     Node.currentTerm++;
                     Node.votedFor = NodeId;
                     AtomicReference<Integer> voteNum = new AtomicReference<>(0);
                     for (int hostId : hostConnectionMap.keySet()){
                         ConnConfig connConfig = hostConnectionMap.get(hostId);
                         new Thread(() -> {
-                            System.out.println(NodeId + " ask vote for " + hostId);
+                            System.out.println(NodeId + " ask vote for id " + hostId);
                             Raft.RequestVoteArgs requestVoteArgs = Raft.RequestVoteArgs.newBuilder()
                                     .setCandidateId(NodeId)
                                     .setTerm(Node.currentTerm)
@@ -69,7 +69,7 @@ public class RaftMain {
                                     .setLastLogTerm(0).build();
                             Raft.RequestVoteReply requestVoteReply = RaftRpcUtils.requestVote(connConfig, requestVoteArgs);
                             if (requestVoteReply != null && requestVoteReply.getVoteGranted() && requestVoteArgs.getTerm() == Node.currentTerm){
-                                System.out.println(NodeId + " granted from " + requestVoteReply.getFrom());
+                                System.out.println(NodeId + " granted from id " + requestVoteReply.getFrom());
                                 voteNum.getAndSet(voteNum.get() + 1);
                                 if (voteNum.get() == hostConnectionMap.size()/2 && Node.serverState == Raft.Role.Candidate){
                                     Node.serverState = Raft.Role.Leader;
@@ -90,14 +90,14 @@ public class RaftMain {
                         //Time out
                     }else{
                         Node.electionTimeout = 3000 + (int)(Math.random()*1000);
-                        System.out.println(NodeId + " reset electionTimeout as " + Node.electionTimeout);
+                        System.out.println(NodeId + " reset electionTimeout as " + Node.electionTimeout + " ms");
                     }
 
 
                     break;
 
                 case Follower:
-                    System.out.println(NodeId + " becomes follower at " + Node.currentTerm);
+                    System.out.println(NodeId + " becomes follower at Term " + Node.currentTerm);
                     Integer poll_f = Node.resetQueue.poll(Node.electionTimeout, TimeUnit.MILLISECONDS);
                     if (poll_f == null){
                         Node.serverState = Raft.Role.Candidate;
@@ -106,8 +106,8 @@ public class RaftMain {
 
 
                 case Leader:
-                    System.out.println(NodeId + " becomes leader at " + Node.currentTerm);
-                    System.out.println("First heart beat interval");
+                    System.out.println(NodeId + " becomes leader at Term " + Node.currentTerm);
+                    System.out.println(NodeId +" leader First heart beat interval");
                     for (int hostId : hostConnectionMap.keySet()){
                         ConnConfig connConfig = hostConnectionMap.get(hostId);
                         new Thread(() -> {
@@ -128,17 +128,16 @@ public class RaftMain {
                         if (poll_l != null){
                             continue;
                         }
-                        System.out.println("Normal heart beat interval");
+                        System.out.println(NodeId +" leader Normal heart beat interval");
                         int leaderCommit = Node.commitIndex;
-
+                        AtomicInteger successNum = new AtomicInteger();
                         for (int hostId : hostConnectionMap.keySet()){
                             ConnConfig connConfig = hostConnectionMap.get(hostId);
-
                             new Thread(() -> {
                                 Raft.AppendEntriesArgs appendEntriesArgs;
                                 if (Node.NodeLogMatch.containsKey((hostId))){
                                     int prevlog = Node.NodeLogMatch.get(hostId);
-                                    System.out.println("Leader send prev logs");
+                                    System.out.println(NodeId + " Leader send prev logs at prevlog idx " + prevlog + " to "+hostId);
                                     if (prevlog < 0){
                                         appendEntriesArgs = Raft.AppendEntriesArgs.newBuilder()
                                                 .setFrom(Node.nodeId)
@@ -166,7 +165,8 @@ public class RaftMain {
                                     Node.NodeLogMatch.remove(hostId);
                                 }else {
                                     if (Node.commitIndex < Node.log.size()-1) {
-                                        System.out.println("send new logs");
+                                        System.out.println(NodeId + " send new logs to "+hostId);
+//                                        System.out.println("--->"+(Node.log.size() - 1));
                                         appendEntriesArgs = Raft.AppendEntriesArgs.newBuilder()
                                                 .setFrom(Node.nodeId)
                                                 .setLeaderId(Node.nodeId)
@@ -174,7 +174,8 @@ public class RaftMain {
                                                 .setTerm(Node.currentTerm)
                                                 .setPrevLogTerm(Node.lastLogTerm)
                                                 .setPrevLogIndex(Node.log.size() - 1)
-                                                .addEntries(Node.log.get(Node.commitIndex+1))
+//                                                .addEntries(Node.log.get(Node.commitIndex+1))
+                                                .addAllEntries(Node.log.subList(Node.commitIndex+1, Node.log.size()))
                                                 .setLeaderCommit(Node.commitIndex)
                                                 .build();
                                     } else {
@@ -191,16 +192,16 @@ public class RaftMain {
                                 }
 
                                 Raft.AppendEntriesReply appendEntriesReply = RaftRpcUtils.appendEntries(connConfig, appendEntriesArgs);
-                                int successNum = 0;
                                 if (appendEntriesReply != null && appendEntriesReply.getSuccess() && Node.commitIndex < Node.log.size()-1){
                                     synchronized (lock){
-                                        System.out.println("Leader commit get majority votes");
-                                        successNum++;
-                                        if (successNum == hostConnectionMap.size()/2 &&  Node.semaphoreMap.get(leaderCommit) != null){
-                                            Node.semaphoreMap.get(leaderCommit).release();
+                                        successNum.getAndIncrement();
+                                        System.out.println(NodeId + " Leader commit get  votes with total " + successNum);
+                                        if (successNum.get() >= hostConnectionMap.size()/2 &&  Node.semaphoreMap.get(leaderCommit) != null){
+                                            Node.semaphoreMap.get(leaderCommit).release(appendEntriesArgs.getEntriesCount());
                                         }
                                     }
                                 }else if(appendEntriesReply != null && !appendEntriesReply.getSuccess()){
+                                    System.out.println(NodeId + " Leader append entries reject from" + appendEntriesReply.getFrom());
                                     Node.NodeLogMatch.put(appendEntriesReply.getFrom(), appendEntriesReply.getMatchIndex());
                                 }
                             }).start();

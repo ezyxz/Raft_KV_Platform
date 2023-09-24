@@ -116,6 +116,7 @@ enum Status{
     KeyFound = 1;
     KeyNotFound = 2;
     WrongNode = 3;
+    FAIL = 4;
 }
 
 enum MsgName{
