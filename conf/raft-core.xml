@@ -1,0 +1,11 @@
+<replication_config>
+    <replication>5</replication>
+    <local_replicator_id>1</local_replicator_id>  <!-- 本机 ID -->
+    <replicators>
+        <replicator id="1">127.0.0.1:6001</replicator>
+        <replicator id="2">127.0.0.1:6002</replicator>
+        <replicator id="3">127.0.0.1:6003</replicator>
+        <replicator id="4">127.0.0.1:6004</replicator>
+        <replicator id="5">127.0.0.1:6005</replicator>
+    </replicators>
+</replication_config>
