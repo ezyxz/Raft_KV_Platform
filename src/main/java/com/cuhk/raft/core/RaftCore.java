@@ -11,12 +11,14 @@ public class RaftCore extends RaftNodeGrpc.RaftNodeImplBase{
     private final int electionTimeout; //作为candidate时，选举超市时间 单位ms
 
     private int currentTerm = 0;
-    private int  votedFor = -1;
+    private int votedFor = -1;
+    Raft.Role currentRole;
 
     public RaftCore(int nodeId, int heartBeatInterval, int electionTimeout) {
         this.nodeId = nodeId;
         this.heartBeatInterval = heartBeatInterval;
         this.electionTimeout = electionTimeout;
+        this.currentRole = Raft.Role.Follower;
     }
 
     @Override

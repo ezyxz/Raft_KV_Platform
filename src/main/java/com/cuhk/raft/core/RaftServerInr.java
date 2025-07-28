@@ -9,19 +9,19 @@ import org.apache.log4j.Logger;
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 
-public class RaftServer {
+public class RaftServerInr {
 
-    Logger logger = Logger.getLogger(RaftServer.class);
+    Logger logger = Logger.getLogger(RaftServerInr.class);
 
 
     private Server server;
     private final int port;
 
-    public RaftServer(int port) {
+    public RaftServerInr(int port) {
         this.port = port;
     }
 
-    public RaftServer(Server server, int port) {
+    public RaftServerInr(Server server, int port) {
         this.server = server;
         this.port = port;
     }
@@ -46,7 +46,7 @@ public class RaftServer {
                 // Use stderr here since the logger may have been reset by its JVM shutdown hook.
                 System.err.println("*** shutting down gRPC server since JVM is shutting down");
                 try {
-                    RaftServer.this.stop();
+                    RaftServerInr.this.stop();
                 } catch (InterruptedException e) {
                     e.printStackTrace(System.err);
                 }

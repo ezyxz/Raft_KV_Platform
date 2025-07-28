@@ -1,4 +1,4 @@
-import com.cuhk.raft.core.RaftServer;
+import com.cuhk.raft.core.RaftServerInr;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -6,7 +6,7 @@ import java.io.IOException;
 public class TestRaftServer {
     @Test
     void test01 () throws IOException {
-        RaftServer server = new RaftServer(50001);
+        RaftServerInr server = new RaftServerInr(50001);
         server.build(null);
     }
 

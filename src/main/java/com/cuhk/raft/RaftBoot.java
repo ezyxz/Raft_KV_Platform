@@ -2,7 +2,6 @@ package com.cuhk.raft;
 
 import com.cuhk.raft.bean.ReplicationConfig;
 import com.cuhk.raft.core.RaftProgramme;
-import com.cuhk.raft.core.RaftServer;
 import com.cuhk.raft.utils.StringUtils;
 import com.cuhk.raft.utils.ToolUtils;
 import org.apache.log4j.Logger;
@@ -20,7 +19,7 @@ public class RaftBoot {
         logger.info("replicationConfig Load below:");
         logger.info(replicationConfig);
         RaftProgramme raftProgramme = new RaftProgramme(replicationConfig);
-        raftProgramme.rugn();
+        raftProgramme.run();
     }
 
 
