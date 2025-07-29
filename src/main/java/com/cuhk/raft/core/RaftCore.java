@@ -3,22 +3,44 @@ package com.cuhk.raft.core;
 import com.cuhk.raft.pb.Raft;
 import com.cuhk.raft.pb.RaftNodeGrpc;
 import io.grpc.stub.StreamObserver;
+import lombok.Getter;
+import lombok.Setter;
 
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingDeque;
+
+@Getter
 public class RaftCore extends RaftNodeGrpc.RaftNodeImplBase{
 
     private final int nodeId; //表示该节点的id
-    private final int heartBeatInterval;  //作为leader时，心跳间隔时间 单位ms
-    private final int electionTimeout; //作为candidate时，选举超市时间 单位ms
+    private  int heartBeatInterval;  //作为leader时，心跳间隔时间 单位ms
+    private  int electionTimeout; //作为candidate时，选举超市时间 单位ms
+
+
 
     private int currentTerm = 0;
+    @Setter
     private int votedFor = -1;
-    Raft.Role currentRole;
+    @Setter
+    private Raft.Role currentRole;
+
+    public BlockingQueue<Integer> heartBeatRestQueue =new LinkedBlockingDeque<>();
+    public BlockingQueue<Integer> electionRestQueue =new LinkedBlockingDeque<>();
+
 
     public RaftCore(int nodeId, int heartBeatInterval, int electionTimeout) {
         this.nodeId = nodeId;
         this.heartBeatInterval = heartBeatInterval;
         this.electionTimeout = electionTimeout;
         this.currentRole = Raft.Role.Follower;
+    }
+
+    public void termIncrement() {
+        this.currentTerm++;
+    }
+
+    public void resetElectionTimeout(){
+        this.electionTimeout =  3000 + (int)(Math.random()*1000);
     }
 
     @Override
@@ -60,4 +82,5 @@ public class RaftCore extends RaftNodeGrpc.RaftNodeImplBase{
     public void whoAreYou(Raft.WhoAreYouArgs request, StreamObserver<Raft.WhoAreYouReply> responseObserver) {
         super.whoAreYou(request, responseObserver);
     }
+
 }
