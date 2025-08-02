@@ -27,7 +27,7 @@ public class RaftServerInr {
     }
 
     public void build(RaftNodeGrpc.RaftNodeImplBase node) {
-        if (server == null) {
+        if (node == null) {
             throw new NullPointerException("RaftNodeGrpc.RaftNodeImplBase is null");
         }
         this.server = ServerBuilder.forPort(this.port)

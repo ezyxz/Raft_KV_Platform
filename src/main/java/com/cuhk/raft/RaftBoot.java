@@ -12,8 +12,8 @@ public class RaftBoot {
 
     public static void main(String[] args) throws Exception {
         logger.info("Raft start...");
+        logger.info("@author:" + StringUtils.AUTHOR);
         logger.info(StringUtils.RAFT);
-        Thread.sleep(2000);
         logger.info("Loading configuration from /conf/raft-core.xml and args...");
         ReplicationConfig replicationConfig = ToolUtils.parseReplicationConfig(args);
         logger.info("replicationConfig Load below:");

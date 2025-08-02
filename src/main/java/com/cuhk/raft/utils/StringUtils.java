@@ -1,6 +1,9 @@
 package com.cuhk.raft.utils;
 
 public class StringUtils {
+
+    public static final String AUTHOR = "XinYuan Zuo";
+
     public static final String RAFT =
             "\n"+
             ".______          ___       _______ .___________.\n" +
