@@ -1,5 +1,6 @@
 package com.cuhk.raft.core;
 
+import com.cuhk.raft.bean.RaftStateBean;
 import com.cuhk.raft.pb.Raft;
 import com.cuhk.raft.pb.RaftNodeGrpc;
 import com.cuhk.raft.utils.SignalUtils;
@@ -19,40 +20,32 @@ public class RaftCore extends RaftNodeGrpc.RaftNodeImplBase{
 
     Logger logger = Logger.getLogger(RaftCore.class);
 
+    //表示该节点的id
+    private final int nodeId;
 
-    private final int nodeId; //表示该节点的id
-    private  int heartBeatInterval;  //作为leader时，心跳间隔时间 单位ms
-    private  int electionTimeout; //作为candidate时，选举超市时间 单位ms
-    private Map<Integer, Integer> termVoteMap = new ConcurrentHashMap<>();
+    //节点状态
+    private RaftStateBean raftStateBean;
 
-
-    private int currentTerm = 0;
-    @Setter
-    private int votedFor = -1;
-    @Setter
-    private Raft.Role currentRole;
-    @Getter
-    int commitIndex = -1;
-
-    public BlockingQueue<Integer> heartBeatRestQueue =new LinkedBlockingDeque<>();
+    //计时辅助
     public BlockingQueue<Integer> heartIntervalRestQueue =new LinkedBlockingDeque<>();
-
     public BlockingQueue<Integer> electionRestQueue =new LinkedBlockingDeque<>();
+
+    //锁
+    private Object voteLock = new Object();
+    private Object appendEntryLock = new Object();
 
 
     public RaftCore(int nodeId, int heartBeatInterval, int electionTimeout) {
         this.nodeId = nodeId;
-        this.heartBeatInterval = heartBeatInterval;
-        this.electionTimeout = electionTimeout;
-        this.currentRole = Raft.Role.Follower;
+        this.raftStateBean = new RaftStateBean(nodeId, Raft.Role.Follower ,heartBeatInterval, electionTimeout);
     }
 
     public void termIncrement() {
-        this.currentTerm++;
+        this.raftStateBean.setCurrentTerm(this.raftStateBean.getCurrentTerm() + 1);
     }
 
     public void resetRandomElectionTimeout(){
-        this.electionTimeout =  5000 + (int)(Math.random()*1000);
+        this.raftStateBean.setElectionTimeout( 5000 + (int)(Math.random()*1000) );
     }
 
     @Override
@@ -77,74 +70,79 @@ public class RaftCore extends RaftNodeGrpc.RaftNodeImplBase{
 
     @Override
     public void requestVote(Raft.RequestVoteArgs request, StreamObserver<Raft.RequestVoteReply> responseObserver) {
-        logger.info("Node "+this.nodeId + " at term " + this.currentTerm + " recv request vote from Node "+request.getFrom() + "whose term " + request.getTerm());
+        //确保同一时间只能处理一个要票请求，防止同一term多次投票
+        synchronized (voteLock) {
+            logger.info("Node "+this.nodeId + " at term " + this.raftStateBean.getCurrentTerm() + " recv request vote from Node "+request.getFrom() + " whose term " + request.getTerm());
 
-        int term = request.getTerm();
-        int from = request.getFrom();
-        boolean voteGranted = false;
-        //&&  Each server will vote for at most one candidate in a given term
-        if (term > this.currentTerm && termVoteMap.get(term) == null) {
-            logger.info("Node "+this.nodeId + " at term " + this.currentTerm + " do vote from Node "+request.getFrom() + " whose term " + request.getTerm());
-            votedFor = from;
-            voteGranted = true;
-            this.currentRole = Raft.Role.Follower;
-            termVoteMap.put(term,from);
-            try {
-                this.electionRestQueue.put(SignalUtils.ELECTION_RESET_2_FOLLOWER);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
+            int term = request.getTerm();
+            int from = request.getFrom();
+
+            boolean voteGranted = false;
+            // Each server will vote for at most one candidate in a given term
+            if (term > this.raftStateBean.getCurrentTerm() && this.raftStateBean.getTermVoteMap().get(term) == null) {
+                logger.info("Node "+this.nodeId + " at term " + this.raftStateBean.getCurrentTerm() + " do vote from Node "+request.getFrom() + " whose term " + request.getTerm());
+                this.raftStateBean.setVotedFor(from);
+                voteGranted = true;
+                this.raftStateBean.setCurrentRole(Raft.Role.Follower);
+                this.raftStateBean.getTermVoteMap().put(term,from);
+                try {
+                    this.electionRestQueue.put(SignalUtils.ELECTION_RESET_2_FOLLOWER);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
             }
-        }
 
-        Raft.RequestVoteReply requestVoteReply = Raft.RequestVoteReply.newBuilder()
-                .setTo(from)
-                .setFrom(this.nodeId)
-                .setTerm(this.currentTerm)
-                .setVoteGranted(voteGranted)
-                .build();
-        responseObserver.onNext(requestVoteReply);
-        responseObserver.onCompleted();
+            Raft.RequestVoteReply requestVoteReply = Raft.RequestVoteReply.newBuilder()
+                    .setTo(from)
+                    .setFrom(this.nodeId)
+                    .setTerm(this.raftStateBean.getCurrentTerm())
+                    .setVoteGranted(voteGranted)
+                    .build();
+            responseObserver.onNext(requestVoteReply);
+            responseObserver.onCompleted();
+        }
     }
 
     @Override
     public void appendEntries(Raft.AppendEntriesArgs request, StreamObserver<Raft.AppendEntriesReply> responseObserver) {
-        logger.info("Node "+this.nodeId + " at term " + this.currentTerm + " recv appendEntries from Node "+request.getFrom() + " whose term " + request.getTerm());
+        synchronized (appendEntryLock) {
+            logger.info("Node "+this.nodeId + " at term " + this.raftStateBean.getCurrentTerm() + " recv appendEntries from Node "+request.getFrom() + " whose term " + request.getTerm());
 
-        boolean rSuccess = false;
-        int rterm = this.currentTerm;
-        int from = request.getFrom();
-        int leaderId = request.getLeaderId();
-        int term = request.getTerm();
-        int to = request.getTo();
-        //无效appendEntries
-        if ( term < this.currentTerm){
+            boolean rSuccess = false;
+            int rterm = this.raftStateBean.getCurrentTerm();
+            int from = request.getFrom();
+            int leaderId = request.getLeaderId();
+            int term = request.getTerm();
+            int to = request.getTo();
+            //无效appendEntries
+            if ( term < this.raftStateBean.getCurrentTerm()){
+                Raft.AppendEntriesReply appendEntriesReply = Raft.AppendEntriesReply.newBuilder()
+                        .setFrom(nodeId)
+                        .setTerm(this.raftStateBean.getCurrentTerm())
+                        .setSuccess(false).build();
+                responseObserver.onNext(appendEntriesReply);
+                responseObserver.onCompleted();
+                return;
+            }
+            this.raftStateBean.setVotedFor(from);
+            if (term > this.raftStateBean.getCurrentTerm()){
+                this.raftStateBean.setCurrentTerm(term);
+                rterm = term;
+            }
+
+            try {
+                this.electionRestQueue.put(SignalUtils.HEART_BEAT_RESET_2_FOLLOWER);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
             Raft.AppendEntriesReply appendEntriesReply = Raft.AppendEntriesReply.newBuilder()
-                    .setFrom(nodeId)
-                    .setTerm(this.currentTerm)
-                    .setSuccess(false).build();
+                    .setSuccess(rSuccess)
+                    .setTerm(this.raftStateBean.getCurrentTerm())
+                    .setFrom(this.nodeId)
+                    .build();
             responseObserver.onNext(appendEntriesReply);
             responseObserver.onCompleted();
-            return;
         }
-        votedFor = from;
-        if (term > this.currentTerm){
-            this.currentTerm = term;
-            rterm = term;
-        }
-
-        try {
-            this.electionRestQueue.put(SignalUtils.HEART_BEAT_RESET_2_FOLLOWER);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
-        Raft.AppendEntriesReply appendEntriesReply = Raft.AppendEntriesReply.newBuilder()
-                .setSuccess(rSuccess)
-                .setTerm(this.currentTerm)
-                .setFrom(this.nodeId)
-                .build();
-        responseObserver.onNext(appendEntriesReply);
-        responseObserver.onCompleted();
-
     }
 
     @Override

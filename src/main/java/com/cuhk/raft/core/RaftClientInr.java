@@ -1,5 +1,6 @@
 package com.cuhk.raft.core;
 
+import com.cuhk.raft.bean.RaftStateBean;
 import com.cuhk.raft.bean.ReplicatorBean;
 import com.cuhk.raft.pb.Raft;
 import com.cuhk.raft.pb.RaftNodeGrpc;
@@ -27,7 +28,7 @@ public class RaftClientInr {
         this.port = Integer.parseInt(replicatorBean.getAddress().split(":")[1]);
 
     }
-    public Raft.RequestVoteReply requestVote(RaftCore raftCore) {
+    public Raft.RequestVoteReply requestVote(RaftStateBean raftStateBean) {
 
         channel = ManagedChannelBuilder.forAddress(host, port)
                 .usePlaintext() // disable TLS
@@ -35,10 +36,10 @@ public class RaftClientInr {
         blockingStub = RaftNodeGrpc.newBlockingStub(channel);
 
         Raft.RequestVoteArgs requestVoteArgs = Raft.RequestVoteArgs.newBuilder()
-                .setCandidateId(raftCore.getNodeId())
-                .setTerm(raftCore.getCurrentTerm())
+                .setCandidateId(raftStateBean.getNodeId())
+                .setTerm(raftStateBean.getCurrentTerm())
                 .setTo(nodeId)
-                .setFrom(raftCore.getNodeId())
+                .setFrom(raftStateBean.getNodeId())
                 .setLastLogIndex(0)
                 .setLastLogTerm(0).build();
 
@@ -52,7 +53,7 @@ public class RaftClientInr {
         return requestVoteReply;
     }
 
-    public Raft.AppendEntriesReply heatBeat(RaftCore raftCore) {
+    public Raft.AppendEntriesReply heatBeat(RaftStateBean raftStateBean) {
 
         channel = ManagedChannelBuilder.forAddress(host, port)
                 .usePlaintext() // disable TLS
@@ -60,13 +61,13 @@ public class RaftClientInr {
         blockingStub = RaftNodeGrpc.newBlockingStub(channel);
 
         Raft.AppendEntriesArgs appendEntriesArgs = Raft.AppendEntriesArgs.newBuilder()
-                .setFrom(raftCore.getNodeId())
-                .setLeaderId(raftCore.getNodeId())
+                .setFrom(raftStateBean.getNodeId())
+                .setLeaderId(raftStateBean.getNodeId())
                 .setTo(nodeId)
-                .setTerm(raftCore.getCurrentTerm())
+                .setTerm(raftStateBean.getCurrentTerm())
                 .setPrevLogTerm(0)
                 .setPrevLogTerm(0)
-                .setLeaderCommit(raftCore.getCommitIndex())
+                .setLeaderCommit(raftStateBean.getCommitIndex())
                 .build();
         Raft.AppendEntriesReply appendEntriesReply = null;
         try {

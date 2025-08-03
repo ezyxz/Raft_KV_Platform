@@ -58,37 +58,37 @@ public class RaftProgramme {
         //TODO 3.开始运行
         while (true) {
             //TODO 三个角色状态相互切换
-            switch (this.raftCore.getCurrentRole()){
+            switch (this.raftCore.getRaftStateBean().getCurrentRole()){
                 //每个节点初始化都是follower
                 case Follower:
 
-                    logger.info("Node " + nodeId + " becomes Follower at Term " + raftCore.getCurrentTerm());
+                    logger.info("Node " + nodeId + " becomes Follower at Term " + raftCore.getRaftStateBean().getCurrentTerm());
                     //等待leader的心跳或者其他有效candidate的要票,未收到变成candidate
-                    Integer heartSignal = raftCore.electionRestQueue.poll(raftCore.getElectionTimeout(), TimeUnit.MILLISECONDS);
+                    Integer heartSignal = raftCore.electionRestQueue.poll(raftCore.getRaftStateBean().getElectionTimeout(), TimeUnit.MILLISECONDS);
                     if (heartSignal == null)
-                        this.raftCore.setCurrentRole(Raft.Role.Candidate);
+                        this.raftCore.getRaftStateBean().setCurrentRole(Raft.Role.Candidate);
                     break;
 
                 case Candidate:
                     //1.自我任期+1
                     raftCore.termIncrement();
-                    logger.info("Node " + nodeId + " becomes Candidate at term " + raftCore.getCurrentTerm());
+                    logger.info("Node " + nodeId + " becomes Candidate at term " + raftCore.getRaftStateBean().getCurrentTerm());
                     //2.投票给自己
-                    raftCore.setVotedFor(nodeId);
+                    raftCore.getRaftStateBean().setVotedFor(nodeId);
                     //3.广播要票
                     AtomicReference<Integer> voteNum = new AtomicReference<>(0);
                     for (RaftClientInr raftClientInr : raftClientInrList) {
                         //多线程同时发送
                         new Thread(() -> {
-                            int requestVoteTerm = raftCore.getCurrentTerm();
-                            Raft.RequestVoteReply reply = raftClientInr.requestVote(raftCore);
+                            int requestVoteTerm = raftCore.getRaftStateBean().getCurrentTerm();
+                            Raft.RequestVoteReply reply = raftClientInr.requestVote(raftCore.getRaftStateBean());
                             //得到票数，并且自己还是当前term的candidate
-                            if (reply != null && reply.getVoteGranted() && requestVoteTerm == raftCore.getCurrentTerm()) {
-                                logger.info("Node " + nodeId + " granted from Node id " + reply.getFrom() + " at term " + raftCore.getCurrentTerm());
+                            if (reply != null && reply.getVoteGranted() && requestVoteTerm == raftCore.getRaftStateBean().getCurrentTerm()) {
+                                logger.info("Node " + nodeId + " granted from Node id " + reply.getFrom() + " at term " + raftCore.getRaftStateBean().getCurrentTerm());
                                 voteNum.getAndSet(voteNum.get() + 1);
-                                if(voteNum.get() == replications/2 && raftCore.getCurrentRole() == Raft.Role.Candidate) {
+                                if(voteNum.get() == replications/2 && raftCore.getRaftStateBean().getCurrentRole() == Raft.Role.Candidate) {
                                     //成为leader
-                                    raftCore.setCurrentRole(Raft.Role.Leader);
+                                    raftCore.getRaftStateBean().setCurrentRole(Raft.Role.Leader);
                                     try {
                                         raftCore.electionRestQueue.put(SignalUtils.ELECTION_RESET_2_LEADER);
                                     } catch (InterruptedException e) {
@@ -99,7 +99,7 @@ public class RaftProgramme {
                         }).start();
                     }
                     //4.如果超时将重新发送请求
-                    Integer electionSignal = raftCore.electionRestQueue.poll(raftCore.getElectionTimeout(), TimeUnit.MILLISECONDS);
+                    Integer electionSignal = raftCore.electionRestQueue.poll(raftCore.getRaftStateBean().getElectionTimeout(), TimeUnit.MILLISECONDS);
 
                     if (electionSignal != null){
                         if (electionSignal == SignalUtils.ELECTION_RESET_2_LEADER){
@@ -107,7 +107,7 @@ public class RaftProgramme {
                             break;
                         } else if (electionSignal == SignalUtils.ELECTION_RESET_2_FOLLOWER){
                             //在选举的时候，有更高的term的node发送requestVote请求，自动放弃candidate
-                            raftCore.setCurrentRole(Raft.Role.Follower);
+                            raftCore.getRaftStateBean().setCurrentRole(Raft.Role.Follower);
                         }
                     }else{
                         //说明此次选举已经超时,重制超时时间
@@ -116,24 +116,24 @@ public class RaftProgramme {
                     break;
 
                 case Leader:
-                    logger.info("Node " + nodeId + " becomes Leader at Term " + raftCore.getCurrentTerm());
+                    logger.info("Node " + nodeId + " becomes Leader at Term " + raftCore.getRaftStateBean().getCurrentTerm());
                     //1. 成为leader立即向所有节点发出心跳
-                    logger.info("Node " + nodeId + " firstly broadcast heartbeat at Term " + raftCore.getCurrentTerm());
+                    logger.info("Node " + nodeId + " firstly broadcast heartbeat at Term " + raftCore.getRaftStateBean().getCurrentTerm());
                     for (RaftClientInr raftClientInr : raftClientInrList) {
                         new Thread(() -> {
-                            Raft.AppendEntriesReply appendEntriesReply = raftClientInr.heatBeat(raftCore);
+                            Raft.AppendEntriesReply appendEntriesReply = raftClientInr.heatBeat(raftCore.getRaftStateBean());
                         }).start();
                     }
                     //2. leader开始
-                    while (raftCore.getCurrentRole() == Raft.Role.Leader) {
-                        Integer signal = raftCore.heartIntervalRestQueue.poll(raftCore.getHeartBeatInterval(), TimeUnit.MILLISECONDS);
+                    while (raftCore.getRaftStateBean().getCurrentRole() == Raft.Role.Leader) {
+                        Integer signal = raftCore.heartIntervalRestQueue.poll(raftCore.getRaftStateBean().getHeartBeatInterval(), TimeUnit.MILLISECONDS);
                         if (signal != null){
                             continue;
                         }
-                        logger.info("Node " + nodeId + " normally broadcast heartbeat at term " + raftCore.getCurrentTerm());
+                        logger.info("Node " + nodeId + " normally broadcast heartbeat at term " + raftCore.getRaftStateBean().getCurrentTerm());
                         for (RaftClientInr raftClientInr : raftClientInrList) {
                             new Thread(() -> {
-                                Raft.AppendEntriesReply appendEntriesReply = raftClientInr.heatBeat(raftCore);
+                                Raft.AppendEntriesReply appendEntriesReply = raftClientInr.heatBeat(raftCore.getRaftStateBean());
                             }).start();
                         }
                     }
